@@ -15,7 +15,7 @@ inline void permute(char ** toks, size_t numtoks) {
 
 
 // 'numtoks' must be less than or equal to P_RAND_MAX!!!
-inline void mklist(char ** toks, size_t numtoks, char * list, size_t listlen) {
+inline void mklist(char ** toks, size_t numtoks, char ** list, size_t listlen) {
 	p_srand();
 	for(size_t i = 0; i < listlen; i++)
 		list[i] = toks[p_rand() % numtoks];
