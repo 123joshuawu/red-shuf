@@ -9,7 +9,7 @@
 
 typedef int shufi_t;
 #define SHUFI_MAX INT_MAX
-#define SHUFI_MIN INT_MIN
+#define SHUFI_MIN 0
 #define PRI_SHUFI "d"
 
 //shuf -i without -r/-rz
@@ -18,23 +18,35 @@ typedef int shufi_t;
 shufi_t* get_list(shufi_t Low, shufi_t High, size_t * Size){
 
 	shufi_t Range = High - Low;
-	if(Range < 0 || High < 0 || Low < 0){return NULL;} //Invalid Input: invalid range is given
+	// check if invalid range
+	if(Range < 0) {
+		fprintf(stderr, "ERROR: Invalid range. LOW greater than HIGH.\n");
+		return NULL;
+	}
+	if(Low < 0) {
+		fprintf(stderr, "ERROR: Invalid range. LOW is negative.\n");
+		return NULL;
+	}
 	Range ++; //[Low,High]
 
 	if(Range < *Size)
 		*Size = Range;
 
 	// check for overflow
-	if(Range > SIZE_MAX / sizeof(shufi_t))
+	if(Range > SIZE_MAX / sizeof(shufi_t)) {
+		fprintf(stderr, "ERROR: Range to big\n");
 		return NULL;
+	}
 
 	errno = 0;
 	shufi_t* RangeList = (shufi_t*) malloc(Range * sizeof(shufi_t));
 
 	// check for error
 	// don't check if NULL. Could still be valid.
-	if(errno == ENOMEM)
+	if(errno == ENOMEM) {
+		fprintf(stderr, "ERROR: Failed to alocate memory\n");
 		return NULL;
+	}
 	
 	for(shufi_t i=0; i<Range; i++){RangeList[i] = (Low+i);}
 
@@ -43,22 +55,30 @@ shufi_t* get_list(shufi_t Low, shufi_t High, size_t * Size){
 }
 
 static inline void erange() {
-	fprintf(stderr, "ERROR: Invalid range. Usage: shuf -i LOW-HIGH\n");
+	fprintf(stderr, "ERROR: Invalid range. Usage: shuf -i LO-HI\n");
 }
 
 static inline int getshufi(char *nptr, char **endptr, shufi_t * num) {
 	errno = 0;
-	long long ll = strtoll(nptr, endptr, 10);
-	if(errno == ERANGE || ll < SHUFI_MIN || ll > SHUFI_MAX) {
-		fprintf(stderr, "ERROR: -i value out of range [%" PRI_SHUFI ",%" PRI_SHUFI "]\n",
-				SHUFI_MIN, SHUFI_MAX);
+	long l = strtol(nptr, endptr, 10);
+	if(errno == ERANGE || l < SHUFI_MIN || l > SHUFI_MAX) {
+		size_t i = 1;
+		while(nptr[i] != '\0') {
+			if(nptr[i] == '-') {
+				nptr[i] = '\0';
+				break;
+			}
+			i++;
+		}
+		fprintf(stderr, "ERROR: -i value out of range [%" PRI_SHUFI ",%" PRI_SHUFI "]: %s\n",
+				SHUFI_MIN, SHUFI_MAX, nptr);
 		return FAILURE;
 	}
 	if(*endptr == nptr) {
 		erange();
 		return FAILURE;
 	}
-	*num = (shufi_t) ll;
+	*num = (shufi_t) l;
 	return SUCCESS;
 }
 
@@ -82,113 +102,141 @@ int getRange(char* LoHi, shufi_t * low, shufi_t * hi){
 static inline int getcount(size_t * cnt) {
 	char * ptr;
 	errno = 0;
-	long long ll = strtoll(optarg, &ptr, 10);
-	if(errno == ERANGE || ll < 0) {
-		fprintf(stderr, "ERROR: -n value out of range [0,%lld]\n", LLONG_MAX);
+	long l = strtol(optarg, &ptr, 10);
+	if(errno == ERANGE || l < 0 || l > SIZE_MAX) {
+		fprintf(stderr, "ERROR: -n value out of range [0,%ld]\n", SIZE_MAX);
 		return FAILURE;
 	}
 	if(ptr == optarg || *ptr != '\0') {
 		fprintf(stderr, "ERROR: invalid number '%s'\n", optarg);
 		return FAILURE;
 	}
-	*cnt = (size_t) ll;
+	*cnt = (size_t) l;
 	return SUCCESS;
 }
- 
-int main(int argc, char** argv){
 
-	int opt;
-	char* LoHi = NULL; //-i 
-	size_t Count;  //-n
-	int iscount = 0;
-	char* OutputFile = NULL; //-o
-	char Permute = 'Y'; //-r
-	char* EndLine = "\n"; //-z
-
-        while((opt = getopt(argc,argv,"i:n:o:rz")) != -1){
-
-		switch(opt){
-
-			case 'i' :
-				LoHi = optarg;
-				break;
-
-			case 'n' :
-			       if(getcount(&Count) == FAILURE)
-				 	return EXIT_FAILURE;
-				 iscount = 1;
-			       break;
-			
-			case 'o' :
-			        OutputFile = optarg;
-				break;
-		 	
-			case 'r' : 
-				Permute = 'N';
-				break;
-			
-			case 'z' :
-				EndLine = "\0";
-				break;		
-			case '?' :
-				fprintf(stderr,"ERROR: Invalid input given: ");
-				return EXIT_FAILURE;
-		}
+static inline int print_rand(const shufi_t range, const shufi_t low, const char term, FILE *out) {
+	fprintf(out, "%d%c", p_rand() % range + low, term);
+	if(ferror(out)) {
+		fprintf(stderr, "ERROR: Failed to write to file\n");
+		return FAILURE;
 	}
-	
-	if(LoHi == NULL){
+}
 
-		fprintf(stderr,"ERROR: main() Unable to get range\n");
-		return EXIT_FAILURE;
-	}
-
-	if(OutputFile != NULL){
-		
-		if(strcmp(OutputFile,"-rz") == 0 ||strcmp(OutputFile,"-r") == 0 || strcmp(OutputFile,"-z") == 0){
-			fprintf(stderr,"ERROR: main() No output file given\n");
-               		return EXIT_FAILURE;
-		}
-	}
-	
+/*
+ * Called by main if -i option given
+ * --------------------------
+ * Params:
+ * 	lohi - argument for -i option
+ *	count - argument for -n option converted to size_t. -1 if not specified
+ *	outfile - argument for -o option opend as a file pointer, or stdout if not used
+ *	opts - bitflags. result of bitwise-or-ing OPT_R and OPT_Z if -r and -z were specified, respectively
+ * Returns:
+ *	FAILURE upon failure, else SUCCESS
+ */
+int shufi_main(char *lohi, size_t count, FILE *outfile, int opts) {
 	shufi_t low, high;
-	if(getRange(LoHi, &low, &high) == FAILURE)
-		return EXIT_FAILURE;
-	
-      shufi_t check = high - low;
-	// dont have to check high < 0
-	if(low < 0 || check < 0){
-		erange();
-            return EXIT_FAILURE;
+	if(getRange(lohi, &low, &high) == FAILURE)
+		return FAILURE;
+	char term = opts & OPT_Z ? '\0': '\n';
+	shufi_t range = high - low;
+	// check all elements reachable by p_rand
+	if(range > P_RAND_MAX) {
+		fprintf(stderr, "ERROR: Range too big.\n");
+		return FAILURE;
 	}
-
-	if(Permute == 'Y'){
-
-		if(!iscount){Count = check+1;}
-		shufi_t * result = get_list(low,high,&Count);
-		for(size_t i=0; i<Count; i++){
-			printf("%d",result[i]);
-			printf("%s",EndLine);
-		}
-		free(result);
-
-	}
-	else{
-		shufi_t range = check + 1;
+	// replace
+	if(opts & OPT_R) {
 		p_srand();
-		if(!iscount) {
-			for(;;) {
-				shufi_t R = low + p_rand() % range;
-				printf("%d",R);
-				printf("%s",EndLine);
+		// unlimited
+		if(count < 0)
+			for(;;) // infinite loop...
+				if(print_rand(range, low, term, outfile) == FAILURE)
+					return FAILURE;
+		// limited
+		for(size_t i = 0; i < count; i++)
+			if(print_rand(range, low, term, outfile) == FAILURE)
+				return FAILURE;
+	}
+	// permute
+	else {
+		// nums is dynamically alocated
+		shufi_t *nums = get_list(low, high, &count);
+		if(!nums)
+			return FAILURE;
+		for(size_t i = 0; i < count; i++) {
+			fprintf(outfile,"%d%c",nums[i],term);
+			if(ferror(outfile)) {
+				fprintf(stderr, "ERROR: failed to write to file\n");
+				free(nums);
+				return FAILURE;
 			}
 		}
-		for(size_t i = 0; i < Count; i++){
-			shufi_t R = low + p_rand() % range;
-			printf("%d",R);
-			printf("%s",EndLine);
+		// free nums!
+		free(nums);
+	}
+	return SUCCESS;
+}
+			
+ 
+int main(int argc, char** argv){
+	char *lohi = NULL;
+	size_t count = -1;
+	char *outfile = NULL;
+	int opts = 0;
+	int opt;
+	while((opt = getopt(argc, argv, ":i:n:o:rz")) > 0) {
+		switch(opt) {
+		case 'i':
+			lohi = optarg;
+			break;
+		case 'n':
+			errno = 0;
+			char *end;
+			long l = strtol(optarg, &end, 10);
+			if(errno == ERANGE || l < 0 || l > SIZE_MAX) {
+				fprintf(stderr, "ERROR: -n argument out of range: %s\n", optarg);
+				return EXIT_FAILURE;
+			}
+			if(*end != '\0') {
+				fprintf(stderr, "ERROR: invalid number passed to -n: %s\n", optarg);
+				return EXIT_FAILURE;
+			}
+			count = (size_t) l;
+			break;
+		case 'o':
+			outfile = optarg;
+			break;
+		case 'r':
+			opts |= OPT_R;
+			break;
+		case 'z':
+			opts |= OPT_Z;
+			break;
+		case ':': // missing argument
+			fprintf(stderr, "ERROR: Missing argument for -%c\n", optopt);
+			return EXIT_FAILURE;
+		default: // unknown option
+			fprintf(stderr, "ERROR: Unknown option -%c\n", optopt);
+			return EXIT_FAILURE;
 		}
-	}	
-
-	if(OutputFile != NULL){printf("%s\n",OutputFile);}
+	}
+	FILE *out;
+	if(outfile) {
+		out = fopen(outfile, "w");
+		if(!out) {
+			fprintf(stderr, "ERROR: failed to open file: %s", outfile);
+			return EXIT_FAILURE;
+		}
+	}
+	else
+		out = stdout;
+	int status;
+	if(lohi)
+		status = shufi_main(lohi, count, out, opts);
+	if(out != stdout)
+		fclose(out);
+	if(status == FAILURE)
+		return EXIT_FAILURE;
 	return EXIT_SUCCESS;
 }
