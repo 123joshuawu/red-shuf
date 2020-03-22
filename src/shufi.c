@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include "proxy.h"
@@ -99,22 +98,6 @@ int getRange(char* LoHi, shufi_t * low, shufi_t * hi){
 	}
 }
 
-static inline int getcount(size_t * cnt) {
-	char * ptr;
-	errno = 0;
-	long l = strtol(optarg, &ptr, 10);
-	if(errno == ERANGE || l < 0 || l > SIZE_MAX) {
-		fprintf(stderr, "ERROR: -n value out of range [0,%ld]\n", SIZE_MAX);
-		return FAILURE;
-	}
-	if(ptr == optarg || *ptr != '\0') {
-		fprintf(stderr, "ERROR: invalid number '%s'\n", optarg);
-		return FAILURE;
-	}
-	*cnt = (size_t) l;
-	return SUCCESS;
-}
-
 static inline int print_rand(const shufi_t range, const shufi_t low, const char term, FILE *out) {
 	fprintf(out, "%d%c", p_rand() % range + low, term);
 	if(ferror(out)) {
@@ -176,67 +159,4 @@ int shufi_main(char *lohi, size_t count, FILE *outfile, int opts) {
 		free(nums);
 	}
 	return SUCCESS;
-}
-			
- 
-int main(int argc, char** argv){
-	char *lohi = NULL;
-	size_t count = -1;
-	char *outfile = NULL;
-	int opts = 0;
-	int opt;
-	while((opt = getopt(argc, argv, ":i:n:o:rz")) > 0) {
-		switch(opt) {
-		case 'i':
-			lohi = optarg;
-			break;
-		case 'n':
-			errno = 0;
-			char *end;
-			long l = strtol(optarg, &end, 10);
-			if(errno == ERANGE || l < 0 || l > SIZE_MAX) {
-				fprintf(stderr, "ERROR: -n argument out of range: %s\n", optarg);
-				return EXIT_FAILURE;
-			}
-			if(*end != '\0') {
-				fprintf(stderr, "ERROR: invalid number passed to -n: %s\n", optarg);
-				return EXIT_FAILURE;
-			}
-			count = (size_t) l;
-			break;
-		case 'o':
-			outfile = optarg;
-			break;
-		case 'r':
-			opts |= OPT_R;
-			break;
-		case 'z':
-			opts |= OPT_Z;
-			break;
-		case ':': // missing argument
-			fprintf(stderr, "ERROR: Missing argument for -%c\n", optopt);
-			return EXIT_FAILURE;
-		default: // unknown option
-			fprintf(stderr, "ERROR: Unknown option -%c\n", optopt);
-			return EXIT_FAILURE;
-		}
-	}
-	FILE *out;
-	if(outfile) {
-		out = fopen(outfile, "w");
-		if(!out) {
-			fprintf(stderr, "ERROR: failed to open file: %s", outfile);
-			return EXIT_FAILURE;
-		}
-	}
-	else
-		out = stdout;
-	int status;
-	if(lohi)
-		status = shufi_main(lohi, count, out, opts);
-	if(out != stdout)
-		fclose(out);
-	if(status == FAILURE)
-		return EXIT_FAILURE;
-	return EXIT_SUCCESS;
 }
