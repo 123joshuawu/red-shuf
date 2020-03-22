@@ -99,7 +99,8 @@ int getRange(char* LoHi, shufi_t * low, shufi_t * hi){
 }
 
 static inline int print_rand(const shufi_t range, const shufi_t low, const char term, FILE *out) {
-	fprintf(out, "%d%c", p_rand() % range + low, term);
+	shufi_t limit = range + 1;
+	fprintf(out, "%d%c", p_rand() % limit + low, term);
 	if(ferror(out)) {
 		fprintf(stderr, "ERROR: Failed to write to file\n");
 		return FAILURE;
