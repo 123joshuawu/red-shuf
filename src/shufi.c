@@ -28,14 +28,14 @@ shufi_t* get_list(shufi_t Low, shufi_t High, size_t * Size){
 	}
 	Range ++; //[Low,High]
 
-	if(Range < *Size)
-		*Size = Range;
-
 	// check for overflow
 	if(Range > SIZE_MAX / sizeof(shufi_t)) {
 		fprintf(stderr, "ERROR: Range to big\n");
 		return NULL;
 	}
+
+	if(Range < *Size)
+		*Size = Range;
 
 	errno = 0;
 	shufi_t* RangeList = (shufi_t*) malloc(Range * sizeof(shufi_t));
@@ -100,7 +100,7 @@ int getRange(char* LoHi, shufi_t * low, shufi_t * hi){
 
 static inline int print_rand(const shufi_t range, const shufi_t low, const char term, FILE *out) {
 	shufi_t limit = range + 1;
-	fprintf(out, "%d%c", p_rand() % limit + low, term);
+	fprintf(out, "%" PRI_SHUFI "%c", p_rand() % limit + low, term);
 	if(ferror(out)) {
 		fprintf(stderr, "ERROR: Failed to write to file\n");
 		return FAILURE;
@@ -133,7 +133,7 @@ int shufi_main(char *lohi, size_t count, FILE *outfile, int opts) {
 	if(opts & OPT_R) {
 		p_srand();
 		// unlimited
-		if(count < 0)
+		if(!(opts & OPT_N))
 			for(;;) // infinite loop...
 				if(print_rand(range, low, term, outfile) == FAILURE)
 					return FAILURE;
@@ -144,12 +144,14 @@ int shufi_main(char *lohi, size_t count, FILE *outfile, int opts) {
 	}
 	// permute
 	else {
+		if(opts & OPT_N)
+			count = range + 1;
 		// nums is dynamically alocated
 		shufi_t *nums = get_list(low, high, &count);
 		if(!nums)
 			return FAILURE;
 		for(size_t i = 0; i < count; i++) {
-			fprintf(outfile,"%d%c",nums[i],term);
+			fprintf(outfile, "%" PRI_SHUFI "%c",nums[i],term);
 			if(ferror(outfile)) {
 				fprintf(stderr, "ERROR: failed to write to file\n");
 				free(nums);

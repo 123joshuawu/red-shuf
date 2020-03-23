@@ -8,8 +8,9 @@
 
 #define SUCCESS 0 // return vals indicating success or failure (for error checking)
 #define FAILURE 1
-#define OPT_R 0b01 // bit flags for -r and -z options
-#define OPT_Z 0b10
+#define OPT_N 0b001
+#define OPT_R 0b010 // bit flags for -r and -z options
+#define OPT_Z 0b100
 
 // these are proxies for use in our code so that
 //	it'll be easier to change our random implementation
@@ -17,9 +18,10 @@
 
 // they're inline, so there's no lost efficiency
 
+typedef unsigned int rand_t; // guaranteed to be unsigned
 #define P_RAND_MAX ((rand_t) RAND_MAX) // maximum possible random value
 #define RAND_T_MAX UINT_MAX // maximum value that can be held by rand_t
-typedef unsigned int rand_t; // guaranteed to be unsigned
+#define PRI_RAND "u"
 
 // selects a seed and uses it to seed p_rand
 #define p_srand() \
@@ -27,6 +29,6 @@ typedef unsigned int rand_t; // guaranteed to be unsigned
 
 // returns a random number in the range (0, RAND_MAX)
 #define p_rand() \
-	(rand_t) rand()
+	((rand_t) rand())
 
 #endif

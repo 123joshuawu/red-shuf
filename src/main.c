@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdbool.h>
 #include "proxy.h"
 #include "shufi.h"
+#include "shufe.h"
 
 static inline int getcount(size_t * cnt) {
 	char * ptr;
@@ -22,13 +24,17 @@ static inline int getcount(size_t * cnt) {
 }
 
 int main(int argc, char** argv){
+	int shufe = false;
 	char *lohi = NULL;
-	size_t count = -1;
+	int count = -1;
 	char *outfile = NULL;
 	int opts = 0;
 	int opt;
-	while((opt = getopt(argc, argv, ":i:n:o:rz")) > 0) {
+	while((opt = getopt(argc, argv, ":ei:n:o:rz")) > 0) {
 		switch(opt) {
+		case 'e':
+			shufe = true;
+			break;
 		case 'i':
 			lohi = optarg;
 			break;
@@ -36,7 +42,7 @@ int main(int argc, char** argv){
 			errno = 0;
 			char *end;
 			long l = strtol(optarg, &end, 10);
-			if(errno == ERANGE || l < 0 || l > SIZE_MAX) {
+			if(errno == ERANGE || l < 0 || l > INT_MAX) {
 				fprintf(stderr, "ERROR: -n argument out of range: %s\n", optarg);
 				return EXIT_FAILURE;
 			}
@@ -45,6 +51,7 @@ int main(int argc, char** argv){
 				return EXIT_FAILURE;
 			}
 			count = (size_t) l;
+			opts |= OPT_N;
 			break;
 		case 'o':
 			outfile = optarg;
@@ -56,13 +63,14 @@ int main(int argc, char** argv){
 			opts |= OPT_Z;
 			break;
 		case ':': // missing argument
-			fprintf(stderr, "ERROR: Missing argument for -%c\n", optopt);
+			fprintf(stderr, "ERROR: Missing argument for -%c\n", opt);
 			return EXIT_FAILURE;
 		default: // unknown option
 			fprintf(stderr, "ERROR: Unknown option -%c\n", optopt);
 			return EXIT_FAILURE;
 		}
 	}
+
 	FILE *out;
 	if(outfile) {
 		out = fopen(outfile, "w");
@@ -73,9 +81,13 @@ int main(int argc, char** argv){
 	}
 	else
 		out = stdout;
+
 	int status;
-	if(lohi)
+	if(shufe)
+		status = shufe_main(count, out, opts, argc - optind, &argv[optind]);
+	else if(lohi)
 		status = shufi_main(lohi, count, out, opts);
+
 	if(out != stdout)
 		fclose(out);
 	if(status == FAILURE)
