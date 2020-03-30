@@ -15,8 +15,10 @@ typedef struct vector {
 
 Vector *vec_new(size_t cnt, size_t elem_size);
 
-void vec_add_charp(Vector *vec, char **elem);
+void vec_add_charp(Vector *vec, char *elem);
 
 void vec_del(Vector *vec);
+
+void vec_del_r(Vector *vec);
 
 #endif

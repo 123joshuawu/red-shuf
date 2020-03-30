@@ -24,7 +24,7 @@ Vector *vec_new(size_t cnt, size_t elem_size) {
 	return vec;
 }
 
-void vec_add_charp(Vector *vec, char **elem) {
+void vec_add_charp(Vector *vec, char *elem) {
 	if(vec->size == vec->cap) {
 		vec->cap <<= 1;
 		if((signed int) vec->cap < 0) {
@@ -37,11 +37,19 @@ void vec_add_charp(Vector *vec, char **elem) {
 			return;
 		}
 	}
-	((char **)vec->buf)[vec->size] = *elem;
+	((char **)vec->buf)[vec->size] = elem;
 	vec->size++;
 }
 
 void vec_del(Vector *vec) {
 	free(vec->buf);
 	free(vec);
+}
+
+void vec_del_r(Vector *vec) {
+	size_t size = vec->size;
+	void **buf = vec->buf;
+	for(size_t i = 0; i < size; i++)
+		free(buf[i]);
+	vec_del(vec);
 }
