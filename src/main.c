@@ -6,6 +6,7 @@
 #include "proxy.h"
 #include "shufi.h"
 #include "shufe.h"
+#include "shuf.h"
 
 static void
 usage(const char *name)
@@ -109,11 +110,16 @@ int main(int argc, char** argv){
 		}
 	}
 
+	if(shufe && lohi) {
+		fprintf(stderr, "ERROR: Can't use both -e and -i\n");
+		return EXIT_FAILURE;
+	}
+
 	FILE *out;
 	if(outfile) {
 		out = fopen(outfile, "w");
 		if(!out) {
-			fprintf(stderr, "ERROR: failed to open file: %s", outfile);
+			fprintf(stderr, "ERROR: failed to open file: %s\n", outfile);
 			return EXIT_FAILURE;
 		}
 	}
@@ -125,6 +131,21 @@ int main(int argc, char** argv){
 		status = shufe_main(count, out, opts, argc - optind, &argv[optind]);
 	else if(lohi)
 		status = shufi_main(lohi, count, out, opts);
+	else {
+		if(optind == argc)
+			status = shuf_main(count, out, opts, stdin);
+		else {
+			FILE *in = fopen(argv[optind], "r");
+			if(!in) {
+				fprintf(stderr, "ERROR: Failed to open file: %s\n", argv[optind]);
+				status = FAILURE;
+			}
+			else {
+				status = shuf_main(count, out, opts, in);
+				fclose(in);
+			}
+		}
+	}
 
 	if(out != stdout)
 		fclose(out);

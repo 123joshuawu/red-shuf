@@ -8,11 +8,10 @@
 #define START_VECSIZE 128
 #define START_BUFSIZE 128
 
-static inline int mkbuf(char **line, Vector *vec) {
+static inline int mkbuf(char **line) {
 	*line = malloc(START_BUFSIZE);
 	if(!*line) {
 		fprintf(stderr, "ERROR: Out of memory.\n");
-		vec_del_r(vec);
 		return FAILURE;
 	}
 }
@@ -20,10 +19,11 @@ static inline int mkbuf(char **line, Vector *vec) {
 static inline int getlines(int opt_z, FILE *in, Vector *vec) {
 	char *line;
 	errno = 0;
-	if(mkbuf(&line, vec) == FAILURE)
+	if(mkbuf(&line) == FAILURE)
 		return FAILURE;
-	ssize_t len = START_BUFSIZE;
-	while(getline(&line, &len, in) >= 0) {
+	size_t start_bufsize = START_BUFSIZE;
+	ssize_t len;
+	while((len = getline(&line, &start_bufsize, in)) >= 0) {
 		if(opt_z) {
 			if(line[len - 1] == '\n')
 				line[len - 1] = '\0';
@@ -31,22 +31,20 @@ static inline int getlines(int opt_z, FILE *in, Vector *vec) {
 		vec_add_charp(vec, line);
 		if(errno) {
 			fprintf(stderr, "ERROR: Out of memory.\n");
-			vec_del_r(vec);
 			return FAILURE;
 		}
-		if(mkbuf(&line, vec) == FAILURE)
+		if(mkbuf(&line) == FAILURE)
 			return FAILURE;
 	}
 	if(errno) {
 		fprintf(stderr, "ERROR: Failed to read input.\n");
-		vec_del_r(vec);
 		return FAILURE;
 	}
 	return SUCCESS;
 }
 
 static inline int repwnul(FILE *out, char **lines, size_t numlines) {
-	fprintf(out, "%s%c", lines[p_rand() % numlines], '\0') < 0? FAILURE: SUCCESS;
+	return fprintf(out, "%s%c", lines[p_rand() % numlines], '\0') < 0? FAILURE: SUCCESS;
 }
 
 static inline int repwlf(FILE *out, char **lines, size_t numlines) {
@@ -101,10 +99,13 @@ static inline int permute(int opt_n, int opt_z, size_t count, FILE *out, char **
 }
 
 int shuf_main(size_t count, FILE *out, int opts, FILE *in) {
+	setvbuf(in, NULL, _IONBF, 0);
 	int opt_z = opts & OPT_Z;
 	Vector *vec = vec_new(START_VECSIZE, sizeof(char *));
-	if(getlines(opt_z, in, vec) == FAILURE)
+	if(getlines(opt_z, in, vec) == FAILURE) {
+		vec_del_r(vec);
 		return FAILURE;
+	}
 	p_srand();
 	size_t numlines = vec->size;
 	char **lines = vec->buf;
