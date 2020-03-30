@@ -16,7 +16,7 @@ static inline int mkbuf(char **line) {
 	}
 }
 
-static inline int getlines(int opt_z, FILE *in, Vector *vec) {
+static inline int getlines(FILE *in, Vector *vec) {
 	char *line;
 	errno = 0;
 	if(mkbuf(&line) == FAILURE)
@@ -24,10 +24,8 @@ static inline int getlines(int opt_z, FILE *in, Vector *vec) {
 	size_t start_bufsize = START_BUFSIZE;
 	ssize_t len;
 	while((len = getline(&line, &start_bufsize, in)) >= 0) {
-		if(opt_z) {
-			if(line[len - 1] == '\n')
-				line[len - 1] = '\0';
-		}
+		if(line[len - 1] == '\n')
+			line[len - 1] = '\0';
 		vec_add_charp(vec, line);
 		if(errno) {
 			fprintf(stderr, "ERROR: Out of memory.\n");
@@ -43,55 +41,30 @@ static inline int getlines(int opt_z, FILE *in, Vector *vec) {
 	return SUCCESS;
 }
 
-static inline int repwnul(FILE *out, char **lines, size_t numlines) {
-	return fprintf(out, "%s%c", lines[p_rand() % numlines], '\0') < 0? FAILURE: SUCCESS;
+static inline int rep(FILE *out, char term, char **lines, size_t numlines) {
+	return fprintf(out, "%s%c", lines[p_rand() % numlines], term) < 0? FAILURE: SUCCESS;
 }
 
-static inline int repwlf(FILE *out, char **lines, size_t numlines) {
-	return fputs(lines[p_rand() % numlines], out) == EOF? FAILURE: SUCCESS;
-}
-
-static inline int replace(int opt_n, int opt_z, int count, FILE *out, char **lines, size_t numlines) {
-	if(opt_n) {
-		if(opt_z) {
-			for(size_t i = 0; i < count; i++)
-				if(repwnul(out, lines, numlines) == FAILURE)
-					return FAILURE;
-			return SUCCESS;
-		}
-		for(size_t i = 0; i < count; i++)
-			if(repwlf(out, lines, numlines) == FAILURE)
-				return FAILURE;
-		return SUCCESS;
-	}
-	if(opt_z) {
-		for(;;)
-			if(repwnul(out, lines, numlines) == FAILURE)
-				return FAILURE;
-		return SUCCESS;
-	}
-	for(;;)
-		if(repwlf(out, lines, numlines) == FAILURE)
+static inline int replace(int opt_n, char term, int count, FILE *out, char **lines, size_t numlines) {
+if(opt_n) {
+	for(size_t i = 0; i < count; i++)
+		if(rep(out, term, lines, numlines) == FAILURE)
 			return FAILURE;
 	return SUCCESS;
 }
+for(;;)
+	if(rep(out, term, lines, numlines) == FAILURE)
+		return FAILURE;
+return SUCCESS;
+}
 
-static inline int permute(int opt_n, int opt_z, size_t count, FILE *out, char **lines, size_t numlines) {
+static inline int permute(int opt_n, char term, size_t count, FILE *out, char **lines, size_t numlines) {
 	if(!opt_n || count > numlines)
 		count = numlines;
 	size_t randidx;
-	if(opt_z) {
-		for(size_t i = count; i > 0; i--) {
-			randidx = p_rand() % i;
-			if(fprintf(out, "%s%c", lines[randidx], '\0') < 0)
-				return FAILURE;
-			lines[randidx] = lines[i - 1];
-		}
-		return SUCCESS;
-	}
 	for(size_t i = count; i > 0; i--) {
 		randidx = p_rand() % i;
-		if(fputs(lines[randidx], out) == EOF)
+		if(fprintf(out, "%s%c", lines[randidx], term) < 0)
 			return FAILURE;
 		lines[randidx] = lines[i - 1];
 	}
@@ -99,10 +72,10 @@ static inline int permute(int opt_n, int opt_z, size_t count, FILE *out, char **
 }
 
 int shuf_main(size_t count, FILE *out, int opts, FILE *in) {
+	char term = opts & OPT_Z? '\0': '\n';
 	setvbuf(in, NULL, _IONBF, 0);
-	int opt_z = opts & OPT_Z;
 	Vector *vec = vec_new(START_VECSIZE, sizeof(char *));
-	if(getlines(opt_z, in, vec) == FAILURE) {
+	if(getlines(in, vec) == FAILURE) {
 		vec_del_r(vec);
 		return FAILURE;
 	}
@@ -115,9 +88,9 @@ int shuf_main(size_t count, FILE *out, int opts, FILE *in) {
 	}
 	int stat;
 	if(opts & OPT_R)
-		stat = replace(opts & OPT_N, opt_z, count, out, lines, numlines);
+		stat = replace(opts & OPT_N, term, count, out, lines, numlines);
 	else
-		stat = permute(opts & OPT_N, opt_z, count, out, lines, numlines);
+		stat = permute(opts & OPT_N, term, count, out, lines, numlines);
 	vec_del_r(vec);
 	if(stat == FAILURE) {
 		fprintf(stderr, "ERROR: Failed to write to file.\n");
