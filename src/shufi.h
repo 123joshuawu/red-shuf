@@ -1,5 +1,6 @@
 #ifndef _SHUFI_H_
 #define _SHUFI_H_
+
 #include <stdlib.h>
 #include <stdio.h>
 
